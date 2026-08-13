@@ -12,7 +12,7 @@ import { RevealGroup, revealItem } from "./ui/Reveal";
 import { Section, SectionHeader } from "./ui/Primitives";
 
 /** `motion.a` would do a full page load; this keeps client-side navigation. */
-const MotionLink = motion(Link);
+const MotionLink = motion.create(Link);
 
 export default function CategoryStrip() {
   const { t } = useT();

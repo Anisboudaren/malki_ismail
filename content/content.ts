@@ -537,7 +537,7 @@ export const courseUi = {
 
 export const teacher = {
   eyebrow: { fr: "Formateur", ar: "المدرّب" } satisfies L10n,
-  // TODO(content): replace with the real bio, portrait and credentials.
+  // TODO(content): confirm the bio and credentials with the client.
   name: { fr: "Ismail Malki", ar: "إسماعيل مالكي" } satisfies L10n,
   role: { fr: "Photographe · Formateur", ar: "مصوّر · مدرّب" } satisfies L10n,
   credentials: [
@@ -549,8 +549,12 @@ export const teacher = {
     fr: "Ismail forme depuis dix ans des créateurs algériens à tirer des images professionnelles d'un simple téléphone. Sa méthode est volontairement dépouillée : comprendre la lumière avant d'acheter du matériel.",
     ar: "يدرّب إسماعيل منذ عشر سنوات المبدعين الجزائريين على انتزاع صور احترافية من هاتف بسيط. منهجه مجرّد عن قصد: افهم الضوء قبل أن تشتري المعدّات.",
   } satisfies L10n,
-  portrait:
-    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=900&q=70",
+  /**
+   * Head-and-shoulders crop of `/teachers/ismail-malki.png`. The source photo
+   * is a square full-body shot, which leaves the face occupying barely a third
+   * of a circular avatar; this is cropped to frame him properly at 64-80px.
+   */
+  portrait: "/teachers/ismail-malki-avatar.png",
 };
 
 /* -------------------------------------------------------------------------- */

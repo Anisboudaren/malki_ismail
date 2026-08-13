@@ -14,8 +14,8 @@ interface NetworkInformation {
 /**
  * Decides how heavy the hero is allowed to be.
  *
- *   desktop → 120 frames @ 1280px
- *   mobile  →  48 frames @  720px
+ *   desktop → 120 frames, 1280x720 full frame
+ *   mobile  →  48 frames, 405x720 portrait crop
  *   static  → poster image only, no pinning
  *
  * Returns null until the check has run on the client, so the server render and

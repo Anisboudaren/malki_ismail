@@ -7,9 +7,8 @@
  * evenly samples it down to the desktop and mobile frame counts, resizes and
  * re-encodes to WebP, and writes the results into /public.
  *
- * To swap in a new clip:
- *   ffmpeg -i clip.mp4 -vf fps=30 "frames/frame_%04d.jpg"
- *   then point "source" at that folder and re-run this script.
+ * The source folder is produced by `npm run frames:extract`. To swap in a new
+ * clip, point "videoSource" at it and run both scripts in order.
  */
 
 import { readFileSync, mkdirSync, rmSync, readdirSync, existsSync } from "node:fs";
@@ -41,17 +40,47 @@ function sample(list, count) {
   return Array.from({ length: count }, (_, i) => list[Math.round(i * step)]);
 }
 
+/**
+ * Largest region of `aspect` (width / height) that fits inside the source.
+ *
+ * The hero canvas paints with cover geometry, so any frame wider than the
+ * viewport gets its sides thrown away at runtime. Cropping to roughly the
+ * viewport shape up front means the bytes we spend are bytes the user sees:
+ * a landscape frame on a tall phone wastes about three quarters of them.
+ *
+ * `anchor` slides the window horizontally, 0 = left edge, 1 = right edge.
+ */
+function cropRegion({ width, height }, { aspect, anchor = 0.5 }) {
+  let w = Math.round(height * aspect);
+  let h = height;
+  if (w > width) {
+    w = width;
+    h = Math.round(width / aspect);
+  }
+  return {
+    left: Math.min(width - w, Math.max(0, Math.round((width - w) * anchor))),
+    top: Math.max(0, Math.round((height - h) / 2)),
+    width: w,
+    height: h,
+  };
+}
+
 async function buildVariant(sourceFrames, variant, name) {
   const outDir = join(root, "public", variant.dir);
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
 
   const picked = sample(sourceFrames, variant.frames);
+  const crop = variant.crop
+    ? cropRegion(await sharp(picked[0]).metadata(), variant.crop)
+    : null;
   let bytes = 0;
 
   for (let i = 0; i < picked.length; i++) {
     const target = join(outDir, `frame_${String(i + 1).padStart(4, "0")}.webp`);
-    const info = await sharp(picked[i])
+    let pipeline = sharp(picked[i]);
+    if (crop) pipeline = pipeline.extract(crop);
+    const info = await pipeline
       .resize({ width: variant.width, withoutEnlargement: true })
       .webp({ quality: variant.quality, effort: 5 })
       .toFile(target);
@@ -59,8 +88,9 @@ async function buildVariant(sourceFrames, variant, name) {
   }
 
   const mb = (bytes / 1048576).toFixed(2);
+  const shape = crop ? `${crop.width}x${crop.height} crop` : "full frame";
   console.log(
-    `  ${name.padEnd(8)} ${String(picked.length).padStart(3)} frames  ${String(variant.width).padStart(4)}px  ${mb} MB`
+    `  ${name.padEnd(8)} ${String(picked.length).padStart(3)} frames  ${String(variant.width).padStart(4)}px  ${shape.padEnd(16)} ${mb} MB`
   );
 }
 

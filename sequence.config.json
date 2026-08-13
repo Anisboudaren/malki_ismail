@@ -1,5 +1,6 @@
 {
-  "source": "frames hero section photographer vedio",
+  "videoSource": "hero section phototgrapher vedio.mp4",
+  "source": "frames-source",
   "fallbackSource": "fall back hero section.png",
   "aspectRatio": 1.7777777778,
   "desktop": {
@@ -11,8 +12,9 @@
   "mobile": {
     "dir": "sequence/mobile",
     "frames": 48,
-    "width": 720,
-    "quality": 62
+    "crop": { "aspect": 0.5625, "anchor": 0.5 },
+    "width": 405,
+    "quality": 80
   },
   "stills": [
     { "name": "still-course.webp", "at": 0.34, "width": 1200, "quality": 78 },
