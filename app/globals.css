@@ -1,0 +1,194 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  PALETTE
+  --gold is sampled straight off 22framesacademy.com (#FFB906).
+  --gold-muted (#C9A24B) is the tempered version used for borders, rules and
+  small type so the page never reads as "bright saturated".
+*/
+@layer base {
+  :root {
+    --ink: 10 10 10; /* #0A0A0A page background */
+    --ink-soft: 17 17 17; /* #111111 alternating band */
+    --ink-card: 23 23 23; /* #171717 card surface */
+    --ink-line: 38 36 33; /* hairline borders */
+
+    --gold: 255 185 6; /* #FFB906 sampled accent */
+    --gold-muted: 201 162 75; /* #C9A24B tempered accent */
+    --gold-deep: 122 92 26; /* deep gold for gradients */
+
+    --cream: 245 241 232; /* #F5F1E8 primary text */
+    --cream-dim: 168 163 152; /* secondary text */
+    --cream-faint: 108 104 97; /* tertiary / captions */
+
+    --nav-height: 4.5rem;
+
+    /*
+      Script-aware type. Components only ever use `font-display` / `font-body`;
+      the pair they resolve to is decided by the nearest `lang`. That also makes
+      the bilingual accent text work for free — an Arabic subtitle inside a
+      French page carries lang="ar" and picks up the Arabic faces.
+    */
+    --font-display: var(--font-latin-display);
+    --font-body: var(--font-latin-body);
+  }
+
+  [lang="fr"] {
+    --font-display: var(--font-latin-display);
+    --font-body: var(--font-latin-body);
+  }
+
+  [lang="ar"] {
+    --font-display: var(--font-ar-display);
+    --font-body: var(--font-ar-body);
+  }
+
+  * {
+    border-color: rgb(var(--ink-line));
+  }
+
+  html {
+    scroll-behavior: smooth;
+    background-color: rgb(var(--ink));
+  }
+
+  body {
+    background-color: rgb(var(--ink));
+    color: rgb(var(--cream));
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: rgb(var(--gold));
+    color: rgb(var(--ink));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+}
+
+@layer components {
+  .shell {
+    @apply mx-auto w-full max-w-shell px-6 md:px-10 lg:px-14;
+  }
+
+  /* Small uppercase label that sits above most section headings. */
+  .eyebrow {
+    @apply font-body text-[0.6875rem] font-medium uppercase tracking-ultrawide text-gold-muted;
+  }
+
+  .heading-xl {
+    @apply font-display font-semibold tracking-tightest text-cream;
+    font-size: clamp(2.5rem, 7vw, 5.5rem);
+    line-height: 0.95;
+  }
+
+  .heading-lg {
+    @apply font-display font-semibold tracking-tightest text-cream;
+    font-size: clamp(2rem, 4.6vw, 3.5rem);
+    line-height: 1.02;
+  }
+
+  .heading-md {
+    @apply font-display font-semibold tracking-tight text-cream;
+    font-size: clamp(1.375rem, 2.2vw, 1.875rem);
+    line-height: 1.15;
+  }
+
+  .body-lg {
+    @apply font-body text-base leading-relaxed text-cream-dim md:text-lg;
+  }
+
+  .hairline {
+    @apply h-px w-full bg-ink-line;
+  }
+}
+
+@layer utilities {
+  /* Vertical fade used to blend full-bleed imagery into the page background. */
+  .mask-fade-b {
+    -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Keeps a number or a Latin string from being reordered by bidi in RTL. */
+  .bidi-ltr {
+    direction: ltr;
+    unicode-bidi: isolate;
+    display: inline-block;
+  }
+
+  .film-grain::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+}
+
+/* =============================================================================
+   ARABIC TYPE METRICS
+   -----------------------------------------------------------------------------
+   A font swap alone is not enough. The Latin scale is built on negative
+   tracking and very tight leading, both of which are actively wrong for Arabic:
+   tracking breaks the joined letterforms apart, and tight leading clips
+   ascenders and diacritics.
+
+   These live outside the Tailwind layers on purpose — they have to outrank the
+   `tracking-*` and `leading-*` utilities the components apply, and scoping them
+   to `[lang="ar"]` means they only bite on Arabic text, including Arabic accent
+   subtitles sitting inside an otherwise French page.
+   ========================================================================== */
+
+[lang="ar"] .tracking-tightest,
+[lang="ar"] .tracking-tight,
+[lang="ar"] h1,
+[lang="ar"] h2,
+[lang="ar"] h3,
+[lang="ar"] h4,
+[lang="ar"] blockquote {
+  letter-spacing: 0;
+}
+
+/* Uppercase micro-labels: Arabic has no case, so the wide tracking that makes
+   them read as labels in Latin just shreds them here. Keep a hint of it. */
+[lang="ar"] .tracking-ultrawide,
+[lang="ar"] .tracking-widest,
+[lang="ar"] .eyebrow {
+  letter-spacing: 0.05em;
+}
+
+[lang="ar"] .heading-xl {
+  line-height: 1.2;
+}
+
+[lang="ar"] .heading-lg {
+  line-height: 1.25;
+}
+
+[lang="ar"] .heading-md {
+  line-height: 1.4;
+}
+
+/* Kufi at display sizes wants a touch less weight than the Latin grotesque to
+   read at the same optical density. */
+[lang="ar"] .heading-xl,
+[lang="ar"] .heading-lg {
+  font-weight: 600;
+}
