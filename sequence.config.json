@@ -2,6 +2,7 @@
   "videoSource": "hero section phototgrapher vedio.mp4",
   "source": "frames-source",
   "fallbackSource": "fall back hero section.png",
+  "blobBaseUrl": "https://6peenlbssgljumwa.public.blob.vercel-storage.com",
   "aspectRatio": 1.7777777778,
   "desktop": {
     "dir": "sequence/desktop",

@@ -1,11 +1,23 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "32mb",
+    },
+  },
   images: {
     // Placeholder photography is pulled from Unsplash until real shoot assets land.
     remotePatterns: [
       { protocol: "https", hostname: "images.unsplash.com" },
       { protocol: "https", hostname: "source.unsplash.com" },
+      { protocol: "https", hostname: "*.public.blob.vercel-storage.com" },
+      {
+        protocol: "https",
+        hostname: "6peenlbssgljumwa.public.blob.vercel-storage.com",
+      },
+      { protocol: "https", hostname: "media.publit.io" },
+      { protocol: "https", hostname: "malki.publit.io" },
     ],
     formats: ["image/avif", "image/webp"],
   },
@@ -16,7 +28,11 @@ const nextConfig = {
     on later as an opt-in.
   */
   async redirects() {
-    return [{ source: "/", destination: "/fr", permanent: false }];
+    return [
+      { source: "/", destination: "/fr", permanent: false },
+      { source: "/inscription", destination: "/login", permanent: false },
+      { source: "/:locale/inscription", destination: "/login", permanent: false },
+    ];
   },
 };
 

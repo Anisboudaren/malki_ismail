@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 
-import { courseUi, featuredCourse, teacher } from "@/content/content";
+import { courseUi, featuredCourse, teacher as defaultTeacher } from "@/content/content";
 import { useT } from "@/lib/LocaleProvider";
 import { coursePath } from "@/lib/routes";
 import { ArrowRight, Check } from "./ui/Icons";
@@ -16,7 +16,11 @@ import { ButtonLink, Section } from "./ui/Primitives";
  * The home page teaser. It stops at "here is the formation and what it costs" —
  * the curriculum, preview video and enrolment all live on the course page.
  */
-export default function CourseSpotlight() {
+export default function CourseSpotlight({
+  teacher = defaultTeacher,
+}: {
+  teacher?: typeof defaultTeacher;
+}) {
   const { t, alt, altLang, locale } = useT();
   const href = coursePath(locale, featuredCourse.slug);
 

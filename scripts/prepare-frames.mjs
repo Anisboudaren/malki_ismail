@@ -8,7 +8,8 @@
  * re-encodes to WebP, and writes the results into /public.
  *
  * The source folder is produced by `npm run frames:extract`. To swap in a new
- * clip, point "videoSource" at it and run both scripts in order.
+ * clip, point "videoSource" at it and run both scripts in order, then
+ * `npm run frames:upload` so production reads the new files from Vercel Blob.
  */
 
 import { readFileSync, mkdirSync, rmSync, readdirSync, existsSync } from "node:fs";

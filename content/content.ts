@@ -11,6 +11,7 @@
    >>> assets or verified figures from the client.
    ========================================================================== */
 
+import { mediaUrl } from "@/lib/sequence";
 import type { L10n } from "@/lib/i18n";
 
 export type { Locale } from "@/lib/i18n";
@@ -80,12 +81,22 @@ export const nav = {
     { label: { fr: "À propos", ar: "عن الأكاديمية" }, href: "#academie" },
     { label: { fr: "Contact", ar: "اتصل بنا" }, href: "#contact" },
   ] satisfies { label: L10n; href: string }[],
-  // TODO(auth): wire to real login route
-  login: { label: { fr: "Connexion", ar: "تسجيل الدخول" }, href: "#" },
-  cta: { label: { fr: "S'inscrire", ar: "سجّل الآن" }, href: "#tarifs" },
+  login: { label: { fr: "Connexion", ar: "تسجيل الدخول" }, href: "/login" },
+  cta: { label: { fr: "S'inscrire", ar: "سجّل الآن" }, href: "/login" },
+  account: { fr: "Mon espace", ar: "مساحتي" } satisfies L10n,
+  signedIn: { fr: "Connecté", ar: "متصل" } satisfies L10n,
   openMenu: { fr: "Ouvrir le menu", ar: "فتح القائمة" } satisfies L10n,
   closeMenu: { fr: "Fermer le menu", ar: "إغلاق القائمة" } satisfies L10n,
   languageLabel: { fr: "Langue", ar: "اللغة" } satisfies L10n,
+};
+
+/* -------------------------------------------------------------------------- */
+/* Homepage ambient music (YouTube embed, not a downloaded file)               */
+/* -------------------------------------------------------------------------- */
+
+export const ambientMusic = {
+  mute: { fr: "Couper le son", ar: "كتم الصوت" } satisfies L10n,
+  unmute: { fr: "Activer le son", ar: "تشغيل الصوت" } satisfies L10n,
 };
 
 /* -------------------------------------------------------------------------- */
@@ -100,6 +111,9 @@ export const nav = {
  * The headline deliberately has no `in` window — it is already on screen when
  * the page loads (it animates in on mount instead) so visitors never land on a
  * hero with no message. Everything after it is scroll-driven.
+ *
+ * `snaps` are the rest positions the hero magnetizes to after a flick — one
+ * for each copy beat, at the centre of that beat's fully-visible window.
  */
 export const hero = {
   eyebrow: {
@@ -140,6 +154,8 @@ export const hero = {
     },
     at: { in: [0.8, 0.9] } as const,
   },
+  /** Scroll-progress rest stops: headline, subheadline, closing CTA. */
+  snaps: [0, 0.58, 0.95] as const,
   scrollHint: { fr: "Défilez", ar: "مرّر" } satisfies L10n,
   loadingLabel: {
     fr: "Chargement de la séquence",
@@ -496,7 +512,7 @@ const photographyMobileCourse = {
     ar: "شاهد فيديو التقديم",
   } satisfies L10n,
   // Real still cut from the client's own clip by `npm run frames`.
-  image: "/still-course.webp",
+  image: mediaUrl("still-course.webp"),
 };
 
 export type Course = typeof photographyMobileCourse;
@@ -732,7 +748,7 @@ export const marketplace = {
   ] satisfies { name: L10n; discipline: L10n; eta: string }[],
   cta: { label: { fr: "Devenir formateur", ar: "كن مدرّباً" }, href: "#contact" },
   // Real still cut from the client's own clip by `npm run frames`.
-  image: "/still-academy.webp",
+  image: mediaUrl("still-academy.webp"),
 };
 
 /* -------------------------------------------------------------------------- */
@@ -853,16 +869,15 @@ export const footer = {
       links: [
         { label: { fr: "Catégories", ar: "الفئات" }, href: "#categories" },
         { label: { fr: "Avis sur les cours", ar: "تقييمات الدورات" }, href: "#temoignages" },
-        { label: { fr: "FAQ", ar: "الأسئلة الشائعة" }, href: "#" },
+        { label: { fr: "FAQ", ar: "الأسئلة الشائعة" }, href: "/faq" },
         { label: { fr: "Contact", ar: "اتصل بنا" }, href: "#contact" },
       ],
     },
     {
       title: { fr: "Mon compte", ar: "حسابي" },
       links: [
-        { label: { fr: "Connexion", ar: "تسجيل الدخول" }, href: "#" },
-        { label: { fr: "Créer un compte", ar: "إنشاء حساب" }, href: "#" },
-        { label: { fr: "Mes formations", ar: "دوراتي" }, href: "#" },
+        { label: { fr: "Connexion / Inscription", ar: "دخول / تسجيل" }, href: "/login" },
+        { label: { fr: "Mes formations", ar: "دوراتي" }, href: "/student" },
       ],
     },
   ] satisfies { title: L10n; links: { label: L10n; href: string }[] }[],
@@ -877,25 +892,96 @@ export const footer = {
     } satisfies L10n,
     placeholder: { fr: "votre@email.com", ar: "بريدك الإلكتروني" } satisfies L10n,
     cta: { fr: "Rejoindre", ar: "انضم" } satisfies L10n,
-    // TODO(backend): no submit handler — this form is intentionally inert.
     success: {
       fr: "Merci. Vous êtes sur la liste.",
       ar: "شكراً. أنت الآن في القائمة.",
     } satisfies L10n,
+    duplicate: {
+      fr: "Cet email est déjà inscrit.",
+      ar: "هذا البريد مسجّل مسبقاً.",
+    } satisfies L10n,
+    error: {
+      fr: "Impossible d'enregistrer l'email. Réessayez.",
+      ar: "تعذّر حفظ البريد. حاول مرة أخرى.",
+    } satisfies L10n,
   },
-  socials: [
-    { label: "Instagram", href: "#", icon: "instagram" as const },
-    { label: "Facebook", href: "#", icon: "facebook" as const },
-    { label: "TikTok", href: "#", icon: "tiktok" as const },
-    { label: "YouTube", href: "#", icon: "youtube" as const },
-  ],
+  socials: [] as { label: string; href: string; icon: "instagram" | "facebook" | "tiktok" | "youtube" }[],
   legal: [
-    { label: { fr: "Mentions légales", ar: "الإشعارات القانونية" }, href: "#" },
-    { label: { fr: "Conditions générales", ar: "الشروط العامة" }, href: "#" },
-    { label: { fr: "Confidentialité", ar: "الخصوصية" }, href: "#" },
+    { label: { fr: "Mentions légales", ar: "الإشعارات القانونية" }, href: "/mentions-legales" },
+    { label: { fr: "Conditions générales", ar: "الشروط العامة" }, href: "/conditions" },
+    { label: { fr: "Confidentialité", ar: "الخصوصية" }, href: "/confidentialite" },
   ] satisfies { label: L10n; href: string }[],
   copyright: {
     fr: `© ${new Date().getFullYear()} Malki Academy. Tous droits réservés.`,
     ar: `© ${new Date().getFullYear()} أكاديمية مالكي. جميع الحقوق محفوظة.`,
   } satisfies L10n,
+};
+
+export const contactForm = {
+  title: { fr: "Écrivez-nous", ar: "راسلنا" } satisfies L10n,
+  body: {
+    fr: "Une question sur une formation ou un paiement ? Laissez vos coordonnées — on vous répond.",
+    ar: "سؤال عن دورة أو دفع؟ اترك بياناتك وسنرد عليك.",
+  } satisfies L10n,
+  name: { fr: "Nom", ar: "الاسم" } satisfies L10n,
+  contact: { fr: "Email ou WhatsApp", ar: "البريد أو واتساب" } satisfies L10n,
+  contactPlaceholder: { fr: "email@… ou +213…", ar: "email@… أو +213…" } satisfies L10n,
+  message: { fr: "Message", ar: "الرسالة" } satisfies L10n,
+  submit: { fr: "Envoyer", ar: "إرسال" } satisfies L10n,
+  sending: { fr: "Envoi…", ar: "جاري الإرسال…" } satisfies L10n,
+  success: {
+    fr: "Message envoyé. Nous vous répondons dès que possible.",
+    ar: "تم الإرسال. سنرد في أقرب وقت.",
+  } satisfies L10n,
+};
+
+export const legalPages = {
+  mentions: {
+    title: { fr: "Mentions légales", ar: "الإشعارات القانونية" } satisfies L10n,
+    body: {
+      fr: "Malki Academy est une académie en ligne de photographie et de création, opérée en Algérie. Contact : contact@malkiacademy.com — 0541 67 85 51.",
+      ar: "أكاديمية مالكي أكاديمية إلكترونية للتصوير والإبداع، تعمل من الجزائر. للتواصل: contact@malkiacademy.com — 0541 67 85 51.",
+    } satisfies L10n,
+  },
+  terms: {
+    title: { fr: "Conditions générales", ar: "الشروط العامة" } satisfies L10n,
+    body: {
+      fr: "L’accès aux formations se fait après confirmation du paiement (WhatsApp, virement ou autre moyen convenu). Un compte se crée automatiquement à la première connexion par email. L’accès est personnel et non cessible. Pour toute réclamation, écrivez-nous via la page Contact.",
+      ar: "يُفعَّل الوصول إلى الدورات بعد تأكيد الدفع (واتساب أو تحويل أو وسيلة متفق عليها). يُنشأ الحساب تلقائياً عند أول دخول بالبريد. الوصول شخصي وغير قابل للتنازل. لأي شكوى، راسلنا عبر صفحة الاتصال.",
+    } satisfies L10n,
+  },
+  privacy: {
+    title: { fr: "Confidentialité", ar: "الخصوصية" } satisfies L10n,
+    body: {
+      fr: "Nous collectons uniquement ce qui sert à vous inscrire, vous contacter et vous donner accès aux cours : nom, email, WhatsApp, messages et progression. Ces données ne sont pas vendues. Vous pouvez demander leur suppression en nous écrivant à contact@malkiacademy.com.",
+      ar: "نجمع فقط ما يلزم للتسجيل والتواصل ومنح الوصول: الاسم والبريد وواتساب والرسائل والتقدم. لا نبيع هذه البيانات. يمكنك طلب حذفها عبر contact@malkiacademy.com.",
+    } satisfies L10n,
+  },
+};
+
+export const faqPage = {
+  title: { fr: "Questions fréquentes", ar: "أسئلة شائعة" } satisfies L10n,
+  items: [
+    {
+      q: { fr: "Comment je m’inscris ?", ar: "كيف أسجّل؟" } satisfies L10n,
+      a: {
+        fr: "Entrez votre email sur la page Connexion. Nous envoyons un code à 6 chiffres — pas de mot de passe. Un compte élève se crée tout seul au premier code validé.",
+        ar: "أدخل بريدك في صفحة الدخول. نرسل رمزاً من 6 أرقام — بدون كلمة مرور. يُنشأ حساب الطالب تلقائياً عند أول رمز صحيح.",
+      } satisfies L10n,
+    },
+    {
+      q: { fr: "Comment j’accède à un cours ?", ar: "كيف أصل إلى دورة؟" } satisfies L10n,
+      a: {
+        fr: "Demandez l’accès depuis la page du cours (ou commandez en invité avec votre nom et WhatsApp). Nous vous contactons pour le paiement, puis l’accès s’ouvre dans votre espace élève.",
+        ar: "اطلب الوصول من صفحة الدورة (أو اطلب كزائر باسمك وواتساب). نتواصل معك لإتمام الدفع ثم يُفتح الوصول في مساحتك.",
+      } satisfies L10n,
+    },
+    {
+      q: { fr: "Quels moyens de paiement ?", ar: "ما وسائل الدفع؟" } satisfies L10n,
+      a: {
+        fr: "Le paiement se fait hors plateforme (WhatsApp, virement, espèces). Dès confirmation, l’équipe active votre accès.",
+        ar: "الدفع خارج المنصة (واتساب أو تحويل أو نقداً). بعد التأكيد تفعّل الإدارة وصولك.",
+      } satisfies L10n,
+    },
+  ],
 };

@@ -9,15 +9,23 @@ import { brand, nav } from "@/content/content";
 import { useT } from "@/lib/LocaleProvider";
 import { LOCALES, LOCALE_LABEL, LOCALE_NAME, isLocale, type Locale } from "@/lib/i18n";
 import { homeAnchor, homePath } from "@/lib/routes";
+import { dashboardHome, type AppRole } from "@/lib/dashboard-home";
 import { Close, Menu } from "./ui/Icons";
 import { ButtonLink } from "./ui/Primitives";
 
-export default function Nav() {
+export type NavAccount = {
+  name: string | null;
+  email: string | null;
+  role: AppRole;
+};
+
+export default function Nav({ account = null }: { account?: NavAccount | null }) {
   const { t, locale } = useT();
   const { scrolled, pastHero } = useNavScrollState();
   const [open, setOpen] = useState(false);
   const href = (target: string) => homeAnchor(locale, target);
   const swapLocale = useLocaleSwap();
+  const accountName = accountLabel(account);
 
   // Don't let the page scroll behind the mobile drawer.
   useEffect(() => {
@@ -84,12 +92,30 @@ export default function Nav() {
         <div className="hidden items-center gap-3 lg:flex">
           <LocaleSwitcher active={locale} />
           <span aria-hidden className="h-4 w-px bg-ink-line" />
-          <ButtonLink href={href(nav.login.href)} variant="ghost">
-            {t(nav.login.label)}
-          </ButtonLink>
-          <ButtonLink href={href(nav.cta.href)} variant="gold">
-            {t(nav.cta.label)}
-          </ButtonLink>
+          {account ? (
+            <>
+              <span className="flex min-w-0 max-w-[12rem] flex-col items-end leading-tight">
+                <span className="font-body text-[0.65rem] uppercase tracking-wide text-gold">
+                  {t(nav.signedIn)}
+                </span>
+                <span className="truncate font-body text-sm text-cream" title={account.email ?? undefined}>
+                  {accountName}
+                </span>
+              </span>
+              <ButtonLink href={dashboardHome(account.role)} variant="gold">
+                {t(nav.account)}
+              </ButtonLink>
+            </>
+          ) : (
+            <>
+              <ButtonLink href={href(nav.login.href)} variant="ghost">
+                {t(nav.login.label)}
+              </ButtonLink>
+              <ButtonLink href={href(nav.cta.href)} variant="gold">
+                {t(nav.cta.label)}
+              </ButtonLink>
+            </>
+          )}
         </div>
 
         <div className="flex items-center gap-2 lg:hidden">
@@ -128,22 +154,43 @@ export default function Nav() {
               ))}
 
               <div className="mt-6 flex flex-col gap-3">
-                <ButtonLink
-                  href={href(nav.cta.href)}
-                  variant="gold"
-                  size="lg"
-                  onClick={() => setOpen(false)}
-                >
-                  {t(nav.cta.label)}
-                </ButtonLink>
-                <ButtonLink
-                  href={href(nav.login.href)}
-                  variant="outline"
-                  size="lg"
-                  onClick={() => setOpen(false)}
-                >
-                  {t(nav.login.label)}
-                </ButtonLink>
+                {account ? (
+                  <>
+                    <p className="font-body text-sm text-cream-dim">
+                      <span className="me-2 text-[0.65rem] uppercase tracking-wide text-gold">
+                        {t(nav.signedIn)}
+                      </span>
+                      {accountName}
+                    </p>
+                    <ButtonLink
+                      href={dashboardHome(account.role)}
+                      variant="gold"
+                      size="lg"
+                      onClick={() => setOpen(false)}
+                    >
+                      {t(nav.account)}
+                    </ButtonLink>
+                  </>
+                ) : (
+                  <>
+                    <ButtonLink
+                      href={href(nav.cta.href)}
+                      variant="gold"
+                      size="lg"
+                      onClick={() => setOpen(false)}
+                    >
+                      {t(nav.cta.label)}
+                    </ButtonLink>
+                    <ButtonLink
+                      href={href(nav.login.href)}
+                      variant="outline"
+                      size="lg"
+                      onClick={() => setOpen(false)}
+                    >
+                      {t(nav.login.label)}
+                    </ButtonLink>
+                  </>
+                )}
               </div>
 
               <div className="mt-8 border-t border-ink-line pt-6">
@@ -173,6 +220,13 @@ export default function Nav() {
       </AnimatePresence>
     </header>
   );
+}
+
+function accountLabel(account: NavAccount | null) {
+  if (!account) return "";
+  const name = account.name?.trim();
+  if (name) return name;
+  return account.email ?? "";
 }
 
 /* -------------------------------------------------------------------------- */

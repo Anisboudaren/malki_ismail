@@ -108,6 +108,33 @@
   .hairline {
     @apply h-px w-full bg-ink-line;
   }
+
+  .dash-card {
+    @apply rounded-2xl border border-ink-line bg-ink-card;
+  }
+
+  .dash-gold-rule {
+    @apply h-px w-12 bg-gold;
+  }
+
+  /*
+    Dashboard-only hierarchy. Marketing pages keep the cinematic ink/gold
+    treatment; this scope lifts surfaces so cards, text, and actions scan.
+  */
+  .dash-app {
+    --ink: 24 23 21;
+    --ink-soft: 32 30 27;
+    --ink-card: 42 40 36;
+    --ink-line: 72 67 60;
+    --cream: 250 247 240;
+    --cream-dim: 186 178 164;
+    --cream-faint: 138 131 120;
+  }
+
+  .dash-app .dash-card,
+  .dash-app .rounded-2xl.border {
+    box-shadow: 0 1px 0 rgb(255 255 255 / 0.04);
+  }
 }
 
 @layer utilities {

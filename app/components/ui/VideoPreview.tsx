@@ -3,13 +3,9 @@
 import Image from "next/image";
 import { useState } from "react";
 
+import { LessonPlayer } from "@/app/components/dashboard/LessonPlayer";
 import { Play } from "./Icons";
 
-/**
- * Poster-first embed. The Publitio player is a third-party iframe that pulls
- * its own player bundle, and the hero already spends the page's load budget on
- * the frame sequence — so nothing is requested until someone asks to watch.
- */
 export function VideoPreview({
   src,
   poster,
@@ -28,15 +24,10 @@ export function VideoPreview({
   return (
     <div
       className={`relative aspect-video w-full overflow-hidden rounded-2xl border border-ink-line bg-ink-card ${className}`}
+      dir="ltr"
     >
       {playing ? (
-        <iframe
-          src={src}
-          title={label}
-          allow="autoplay; fullscreen; picture-in-picture"
-          allowFullScreen
-          className="absolute inset-0 h-full w-full border-0"
-        />
+        <LessonPlayer src={src} title={label} autoPlay fill />
       ) : (
         <button
           type="button"
@@ -55,9 +46,6 @@ export function VideoPreview({
 
           <span className="absolute inset-0 grid place-items-center">
             <span className="grid h-16 w-16 place-items-center rounded-full bg-gold/95 text-ink shadow-[0_0_60px_-10px_rgba(255,185,6,0.7)] transition-transform duration-300 ease-cinema group-hover:scale-110">
-              {/* Physical offset, not logical: the triangle keeps pointing
-                  right on /ar the way every video player does, so the optical
-                  correction must not flip with the writing direction. */}
               <Play className="h-6 w-6 translate-x-[2px]" />
             </span>
           </span>

@@ -19,3 +19,19 @@ export const coursePath = (locale: Locale, slug: string) => `/${locale}/courses/
  */
 export const homeAnchor = (locale: Locale, href: string) =>
   href.startsWith("#") ? `/${locale}${href === "#hero" ? "" : href}` : href;
+
+/** Hash → home section; /login and dashboards stay global; other /paths get a locale prefix. */
+export function publicHref(locale: Locale, href: string) {
+  if (href.startsWith("#")) return homeAnchor(locale, href);
+  if (
+    href.startsWith("/login") ||
+    href.startsWith("/inscription") ||
+    href.startsWith("/student") ||
+    href.startsWith("/admin") ||
+    href.startsWith("/teacher")
+  ) {
+    return href;
+  }
+  if (href.startsWith("/")) return `/${locale}${href}`;
+  return href;
+}

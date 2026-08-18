@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 
-import { testimonialSection, testimonials } from "@/content/content";
+import {
+  testimonialSection,
+  testimonials as defaultTestimonials,
+  type Testimonial,
+} from "@/content/content";
 import { useT } from "@/lib/LocaleProvider";
 import { ArrowLeft, ArrowRight, Quote } from "./ui/Icons";
 import { Reveal } from "./ui/Reveal";
@@ -11,7 +15,11 @@ import { Section } from "./ui/Primitives";
 
 const AUTOPLAY_MS = 5200;
 
-export default function Testimonials() {
+export default function Testimonials({
+  items = defaultTestimonials,
+}: {
+  items?: Testimonial[];
+}) {
   const { t, isRtl } = useT();
   const trackRef = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
@@ -41,12 +49,13 @@ export default function Testimonials() {
   const go = useCallback(
     (delta: number) => {
       setIndex((current) => {
-        const next = (current + delta + testimonials.length) % testimonials.length;
+        if (!items.length) return current;
+        const next = (current + delta + items.length) % items.length;
         scrollTo(next);
         return next;
       });
     },
-    [scrollTo]
+    [scrollTo, items.length]
   );
 
   useEffect(() => {
@@ -71,7 +80,7 @@ export default function Testimonials() {
         let closest = 0;
         let min = Infinity;
         (Array.from(track.children) as HTMLElement[]).forEach((child, i) => {
-          if (i >= testimonials.length) return; // trailing spacer
+          if (i >= items.length) return; // trailing spacer
           const rect = child.getBoundingClientRect();
           const distance = Math.abs(rect.left + rect.width / 2 - centre);
           if (distance < min) {
@@ -133,7 +142,7 @@ export default function Testimonials() {
         onBlurCapture={() => setPaused(false)}
         className="no-scrollbar mt-14 flex snap-x snap-mandatory gap-5 overflow-x-auto scroll-smooth px-6 md:px-10 lg:px-14"
       >
-        {testimonials.map((testimonial) => (
+        {items.map((testimonial) => (
           <figure
             key={testimonial.name.fr}
             className="flex w-[85vw] shrink-0 snap-center flex-col justify-between rounded-2xl border border-ink-line bg-ink-card p-8 sm:w-[60vw] lg:w-[30rem]"
@@ -166,7 +175,7 @@ export default function Testimonials() {
       </div>
 
       <div className="shell mt-8 flex gap-2">
-        {testimonials.map((testimonial, i) => (
+        {items.map((testimonial, i) => (
           <button
             key={testimonial.name.fr}
             type="button"

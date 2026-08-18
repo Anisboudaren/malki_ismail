@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
 
 import { isLocale } from "@/lib/i18n";
+import { getPublicTeacher, getPublicTestimonials } from "@/lib/public-data";
+import { getHomeCategorySection } from "@/lib/home-categories";
+import AmbientMusic from "../components/AmbientMusic";
 import CategoryStrip from "../components/CategoryStrip";
 import CourseSpotlight from "../components/CourseSpotlight";
 import Hero from "../components/Hero";
@@ -10,8 +13,16 @@ import Stats from "../components/Stats";
 import Testimonials from "../components/Testimonials";
 import ValueProps from "../components/ValueProps";
 
-export default function Page({ params }: { params: { locale: string } }) {
+export const revalidate = 120;
+
+export default async function Page({ params }: { params: { locale: string } }) {
   if (!isLocale(params.locale)) notFound();
+
+  const [teacher, reviews, homeCategories] = await Promise.all([
+    getPublicTeacher(),
+    getPublicTestimonials(),
+    getHomeCategorySection(),
+  ]);
 
   return (
     <main>
@@ -22,13 +33,16 @@ export default function Page({ params }: { params: { locale: string } }) {
         mount, which would detach an observer bound to a node inside it.
       */}
       <div id="hero-end" aria-hidden className="h-px w-full" />
-      <CategoryStrip />
+      {homeCategories && homeCategories.length > 0 ? (
+        <CategoryStrip categories={homeCategories} />
+      ) : null}
       <Stats />
-      <CourseSpotlight />
+      <CourseSpotlight teacher={teacher} />
       <ValueProps />
-      <Testimonials />
+      <Testimonials items={reviews} />
       <MarketplaceTeaser />
       <Pricing />
+      <AmbientMusic />
     </main>
   );
 }

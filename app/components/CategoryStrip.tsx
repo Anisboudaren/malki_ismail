@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 
-import { categories, categorySection, type Category } from "@/content/content";
+import { categorySection, type Category } from "@/content/content";
 import { useT } from "@/lib/LocaleProvider";
 import { categoryPath } from "@/lib/routes";
 import { ArrowRight, Lock } from "./ui/Icons";
@@ -14,7 +14,7 @@ import { Section, SectionHeader } from "./ui/Primitives";
 /** `motion.a` would do a full page load; this keeps client-side navigation. */
 const MotionLink = motion.create(Link);
 
-export default function CategoryStrip() {
+export default function CategoryStrip({ categories }: { categories: Category[] }) {
   const { t } = useT();
 
   return (

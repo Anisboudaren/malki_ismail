@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, type MutableRefObject, type RefObject } from "react";
 import Image from "next/image";
 import {
   motion,
@@ -18,7 +18,310 @@ import { useSequenceMode } from "@/lib/useSequenceMode";
 import { ArrowDown, ArrowRight } from "./ui/Icons";
 
 /** How much scroll distance the pinned sequence gets. Taller = slower scrub. */
-const SCROLL_HEIGHT = { desktop: "400vh", mobile: "260vh" } as const;
+const SCROLL_HEIGHT = { desktop: "460vh", mobile: "460vh" } as const;
+
+const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+const SNAP_DURATION_MS = 720;
+const SETTLE_MS = 130;
+const STEP_THRESHOLD = 0.07;
+const WHEEL_GAIN = 0.48;
+
+function viewportHeight() {
+  return window.visualViewport?.height ?? window.innerHeight;
+}
+
+function heroMetrics(section: HTMLElement) {
+  const vh = viewportHeight();
+  const range = section.offsetHeight - vh;
+  const top = window.scrollY + section.getBoundingClientRect().top;
+  const progress = range <= 0 ? 0 : Math.min(1, Math.max(0, -section.getBoundingClientRect().top / range));
+  return { vh, range, top, progress };
+}
+
+function easeOutCubic(t: number) {
+  return 1 - (1 - t) ** 3;
+}
+
+/**
+ * iOS sticky + the collapsing URL bar lets the whole hero translate a few
+ * pixels before it pins. While the section is in range we `position: fixed`
+ * the stage to the visual viewport so only the frames move.
+ */
+function useFixedPin(
+  sectionRef: RefObject<HTMLElement | null>,
+  pinRef: RefObject<HTMLDivElement | null>
+) {
+  useEffect(() => {
+    const section = sectionRef.current;
+    const pin = pinRef.current;
+    if (!section || !pin) return;
+
+    let frame = 0;
+
+    const viewport = () => {
+      const vv = window.visualViewport;
+      return {
+        height: vv?.height ?? window.innerHeight,
+        offsetTop: vv?.offsetTop ?? 0,
+      };
+    };
+
+    const update = () => {
+      const rect = section.getBoundingClientRect();
+      const { height: vh, offsetTop } = viewport();
+
+      pin.style.left = "0";
+      pin.style.right = "0";
+      pin.style.width = "100%";
+      pin.style.height = `${vh}px`;
+
+      if (rect.top > 0) {
+        pin.style.position = "absolute";
+        pin.style.top = "0";
+        pin.style.bottom = "auto";
+      } else if (rect.bottom > vh + offsetTop) {
+        pin.style.position = "fixed";
+        pin.style.top = `${offsetTop}px`;
+        pin.style.bottom = "auto";
+      } else {
+        pin.style.position = "absolute";
+        pin.style.top = "auto";
+        pin.style.bottom = "0";
+      }
+    };
+
+    const schedule = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        update();
+      });
+    };
+
+    update();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    window.visualViewport?.addEventListener("resize", schedule);
+    window.visualViewport?.addEventListener("scroll", schedule);
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      window.visualViewport?.removeEventListener("resize", schedule);
+      window.visualViewport?.removeEventListener("scroll", schedule);
+    };
+  }, [sectionRef, pinRef]);
+}
+
+/** After a flick, ease one copy beat at a time — never skip, easy to reverse. */
+function useHeroMagnet(
+  sectionRef: RefObject<HTMLElement | null>,
+  settledIndexRef: MutableRefObject<number>
+) {
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
+    if (window.matchMedia(REDUCED_MOTION).matches) return;
+
+    const snaps = hero.snaps;
+    const last = snaps.length - 1;
+    let touching = false;
+    let animating = false;
+    let raf = 0;
+    let timer = 0;
+    let originIndex = 0;
+    let burst = false;
+    let wheelDir = 0;
+
+    const pinned = () => {
+      const rect = section.getBoundingClientRect();
+      const vh = viewportHeight();
+      return rect.top <= 1 && rect.bottom > vh * 0.55;
+    };
+
+    const stopTween = () => {
+      animating = false;
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+    };
+
+    const tweenTo = (progress: number) => {
+      const { range, top } = heroMetrics(section);
+      const target = top + progress * Math.max(range, 0);
+      const start = window.scrollY;
+      const dist = target - start;
+      if (Math.abs(dist) < 2) return;
+
+      stopTween();
+      animating = true;
+      const t0 = performance.now();
+      const root = document.documentElement;
+      const previous = root.style.scrollBehavior;
+      root.style.scrollBehavior = "auto";
+
+      const step = (now: number) => {
+        if (!animating) {
+          root.style.scrollBehavior = previous;
+          return;
+        }
+        const t = Math.min(1, (now - t0) / SNAP_DURATION_MS);
+        window.scrollTo(0, start + dist * easeOutCubic(t));
+        if (t < 1) {
+          raf = requestAnimationFrame(step);
+          return;
+        }
+        raf = 0;
+        animating = false;
+        root.style.scrollBehavior = previous;
+      };
+      raf = requestAnimationFrame(step);
+    };
+
+    const settle = () => {
+      if (touching || !pinned()) {
+        burst = false;
+        wheelDir = 0;
+        return;
+      }
+
+      const { progress } = heroMetrics(section);
+      const origin = originIndex;
+      const delta = progress - snaps[origin];
+
+      if (origin === last && delta > 0.08) {
+        settledIndexRef.current = last;
+        burst = false;
+        wheelDir = 0;
+        return;
+      }
+
+      let next = origin;
+      if (delta > STEP_THRESHOLD) next = Math.min(last, origin + 1);
+      else if (delta < -STEP_THRESHOLD) next = Math.max(0, origin - 1);
+
+      settledIndexRef.current = next;
+      burst = false;
+      wheelDir = 0;
+      tweenTo(snaps[next]);
+    };
+
+    const schedule = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(settle, SETTLE_MS);
+    };
+
+    const beginBurst = () => {
+      if (burst) return;
+      burst = true;
+      originIndex = settledIndexRef.current;
+    };
+
+    const onTouchStart = () => {
+      touching = true;
+      stopTween();
+      beginBurst();
+      window.clearTimeout(timer);
+    };
+    const onTouchEnd = () => {
+      touching = false;
+      schedule();
+    };
+
+    const onWheel = (event: WheelEvent) => {
+      if (!pinned()) return;
+
+      const { range, top, progress } = heroMetrics(section);
+      if (range <= 0) return;
+
+      beginBurst();
+      if (!wheelDir) wheelDir = event.deltaY === 0 ? 0 : event.deltaY > 0 ? 1 : -1;
+
+      const origin = originIndex;
+      if (origin === last && event.deltaY > 0 && progress >= snaps[last]) {
+        schedule();
+        return;
+      }
+      if (origin === 0 && event.deltaY < 0 && progress <= 0.01) return;
+
+      event.preventDefault();
+      stopTween();
+
+      let dy = event.deltaY;
+      if (event.deltaMode === 1) dy *= 16;
+      if (event.deltaMode === 2) dy *= viewportHeight();
+
+      const toward = origin + (wheelDir || (dy > 0 ? 1 : -1));
+      const neighbor = snaps[Math.max(0, Math.min(last, toward))];
+      const lo = Math.min(snaps[origin], neighbor);
+      const hi =
+        origin === last && wheelDir > 0 ? 1 : Math.max(snaps[origin], neighbor);
+
+      const next = Math.min(hi, Math.max(lo, progress + (dy / range) * WHEEL_GAIN));
+      const root = document.documentElement;
+      const previous = root.style.scrollBehavior;
+      root.style.scrollBehavior = "auto";
+      window.scrollTo(0, top + next * range);
+      root.style.scrollBehavior = previous;
+      schedule();
+    };
+
+    const onScroll = () => {
+      if (touching || burst || animating) return;
+      if (!pinned()) return;
+      beginBurst();
+      schedule();
+    };
+
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
+    window.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    window.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("scroll", onScroll, { passive: true });
+
+    return () => {
+      stopTween();
+      window.clearTimeout(timer);
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchEnd);
+      window.removeEventListener("wheel", onWheel);
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, [sectionRef, settledIndexRef]);
+}
+
+function scrollHeroTo(
+  section: HTMLElement | null,
+  progress: number,
+  settledIndexRef?: MutableRefObject<number>
+) {
+  if (!section) return;
+  const { range, top } = heroMetrics(section);
+  const snaps = hero.snaps;
+  let best = 0;
+  snaps.forEach((point, index) => {
+    if (Math.abs(progress - point) < Math.abs(progress - snaps[best])) best = index;
+  });
+  if (settledIndexRef) settledIndexRef.current = best;
+
+  const target = top + progress * Math.max(range, 0);
+  const start = window.scrollY;
+  const dist = target - start;
+  if (Math.abs(dist) < 2) return;
+
+  const t0 = performance.now();
+  const root = document.documentElement;
+  const previous = root.style.scrollBehavior;
+  root.style.scrollBehavior = "auto";
+  const step = (now: number) => {
+    const t = Math.min(1, (now - t0) / SNAP_DURATION_MS);
+    window.scrollTo(0, start + dist * easeOutCubic(t));
+    if (t < 1) requestAnimationFrame(step);
+    else root.style.scrollBehavior = previous;
+  };
+  requestAnimationFrame(step);
+}
 
 export default function Hero() {
   const mode = useSequenceMode();
@@ -33,9 +336,14 @@ export default function Hero() {
 
 function ScrubHero({ variant }: { variant: SequenceVariant }) {
   const sectionRef = useRef<HTMLElement>(null);
+  const pinRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  const settledIndexRef = useRef(0);
+
   const { frames, count, progress, ready } = useFrameSequence(variant);
+  useFixedPin(sectionRef, pinRef);
+  useHeroMagnet(sectionRef, settledIndexRef);
 
   const { scrollYProgress } = useScroll({
     target: sectionRef,
@@ -141,10 +449,13 @@ function ScrubHero({ variant }: { variant: SequenceVariant }) {
     <section
       id="hero"
       ref={sectionRef}
-      className="relative"
+      className="relative bg-ink"
       style={{ height: SCROLL_HEIGHT[variant] }}
     >
-      <div className="sticky top-0 h-[100svh] w-full overflow-hidden bg-ink">
+      <div
+        ref={pinRef}
+        className="sticky top-0 h-dvh w-full overflow-hidden bg-ink"
+      >
         {/* Poster sits under the canvas so nothing flashes before the first paint. */}
         <Image
           src={sequence.fallbackSrc}
@@ -186,6 +497,8 @@ function ScrubHero({ variant }: { variant: SequenceVariant }) {
           closingOpacity={closingOpacity}
           closingY={closingY}
           hintOpacity={hintOpacity}
+          scrollProgress={scrollYProgress}
+          onJump={(point) => scrollHeroTo(sectionRef.current, point, settledIndexRef)}
         />
 
         {!ready && <SequenceLoader progress={progress} />}
@@ -229,12 +542,16 @@ function HeroOverlay({
   closingOpacity,
   closingY,
   hintOpacity,
+  scrollProgress,
+  onJump,
 }: {
   headline: Checkpoint;
   sub: Checkpoint;
   closingOpacity: MotionValue<number>;
   closingY: MotionValue<number>;
   hintOpacity: MotionValue<number>;
+  scrollProgress: MotionValue<number>;
+  onJump: (progress: number) => void;
 }) {
   const { t } = useT();
 
@@ -296,6 +613,9 @@ function HeroOverlay({
         </motion.div>
       </div>
 
+      {/* Beat anchors — tap to jump, magnet snap lands on the same stops. */}
+      <HeroBeats progress={scrollProgress} onJump={onJump} />
+
       {/* Scroll hint */}
       <motion.div
         style={{ opacity: hintOpacity }}
@@ -306,6 +626,58 @@ function HeroOverlay({
         </span>
         <ArrowDown className="h-4 w-4 animate-bounce text-gold-muted" />
       </motion.div>
+    </div>
+  );
+}
+
+function HeroBeats({
+  progress,
+  onJump,
+}: {
+  progress: MotionValue<number>;
+  onJump: (point: number) => void;
+}) {
+  const { t } = useT();
+  const [active, setActive] = useState(0);
+  const labels = [
+    `${t(hero.headline.lead)} ${t(hero.headline.accent)}`,
+    t(hero.subheadline.text),
+    t(hero.closing.title).replace(/\n/g, " "),
+  ];
+
+  useMotionValueEvent(progress, "change", (value) => {
+    let best = 0;
+    hero.snaps.forEach((point, index) => {
+      if (Math.abs(value - point) < Math.abs(value - hero.snaps[best])) best = index;
+    });
+    setActive((prev) => (prev === best ? prev : best));
+  });
+
+  return (
+    <div
+      className="pointer-events-auto absolute inset-y-0 end-3 z-10 flex flex-col justify-center md:end-6"
+      role="navigation"
+      aria-label={t(hero.scrollHint)}
+    >
+      {hero.snaps.map((point, index) => {
+        const current = index === active;
+        return (
+          <button
+            key={point}
+            type="button"
+            aria-label={labels[index]}
+            aria-current={current ? "true" : undefined}
+            onClick={() => onJump(point)}
+            className="grid h-8 w-8 place-items-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold"
+          >
+            <span
+              className={`block rounded-full transition-[width,height,background-color] duration-300 ease-cinema ${
+                current ? "h-2.5 w-2.5 bg-gold" : "h-1.5 w-1.5 bg-cream/35"
+              }`}
+            />
+          </button>
+        );
+      })}
     </div>
   );
 }

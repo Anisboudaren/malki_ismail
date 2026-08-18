@@ -70,6 +70,7 @@ export function useFrameSequence(variant: SequenceVariant | null): FrameSequence
         };
         img.onerror = done;
         img.decoding = "async";
+        img.crossOrigin = "anonymous";
         img.src = frameSrc(variant, index);
       }).then(loadNext);
     };

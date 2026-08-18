@@ -1,0 +1,362 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("Neon_URL")
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  avatarUrl     String?
+  /// Auth.js Prisma adapter field; kept in sync with avatarUrl.
+  image         String?
+  role          Role      @default(STUDENT)
+  suspended     Boolean   @default(false)
+  notifyEmail   Boolean   @default(true)
+  locale        String    @default("fr")
+  whatsapp      String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts             Account[]
+  sessions             Session[]
+  enrollments          Enrollment[]
+  coursesTaught        Course[]              @relation("TeacherCourses")
+  teacherProfile       TeacherProfile?
+  teacherApplication   TeacherApplication?
+  lessonProgress       LessonProgress[]
+  lessonNotes          LessonNote[]
+  certificates         Certificate[]
+  reviews              Review[]
+  lessonViews          LessonView[]
+  orders               Order[]
+  confirmedOrders      Order[]               @relation("OrderConfirmedBy")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  userAgent    String?
+  ipAddress    String?
+  lastActiveAt DateTime @default(now()) @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model VerificationCode {
+  id        String   @id @default(cuid())
+  email     String
+  codeHash  String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+}
+
+model TeacherProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bioFr       String   @default("")
+  bioAr       String   @default("")
+  roleFr      String   @default("")
+  roleAr      String   @default("")
+  credentials Json     @default("[]")
+  instagram   String?
+  facebook    String?
+  tiktok      String?
+  youtube     String?
+  updatedAt   DateTime @updatedAt
+}
+
+model TeacherApplication {
+  id         String            @id @default(cuid())
+  userId     String            @unique
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message    String
+  status     ApplicationStatus @default(PENDING)
+  createdAt  DateTime          @default(now())
+  reviewedAt DateTime?
+}
+
+model SiteSettings {
+  id                   String  @id @default("default")
+  showCategorySection  Boolean @default(true)
+  siteTitleFr          String  @default("Malki Academy")
+  siteTitleAr          String  @default("Malki Academy")
+  siteDescriptionFr    String  @default("")
+  siteDescriptionAr    String  @default("")
+  ogImage              String?
+  metaPixelId          String?
+  ga4Id                String?
+  tiktokPixelId        String?
+}
+
+model Category {
+  slug        String  @id
+  titleFr     String
+  titleAr     String
+  sortOrder   Int     @default(0)
+  showOnHome  Boolean @default(true)
+  status      String  @default("soon")
+  image       String?
+  courses     Course[]
+}
+
+model MediaAsset {
+  id           String   @id @default(cuid())
+  publitioId   String   @unique
+  title        String   @default("")
+  filename     String   @default("")
+  url          String
+  thumbnailUrl String?
+  bytes        Int?
+  createdAt    DateTime @default(now())
+  lessons      Lesson[]
+}
+
+model Course {
+  id                String   @id @default(cuid())
+  titleFr           String
+  titleAr           String
+  slug              String   @unique
+  categorySlug      String
+  category          Category @relation(fields: [categorySlug], references: [slug])
+  teacherId         String
+  teacher           User     @relation("TeacherCourses", fields: [teacherId], references: [id])
+  summaryFr         String   @default("")
+  summaryAr         String   @default("")
+  bodyFr            String   @default("")
+  bodyAr            String   @default("")
+  thumbnailUrl      String?
+  previewVideoUrl   String?
+  priceDzd          Int?
+  priceStrikeDzd    Int?
+  currency          String   @default("DZD")
+  level             String   @default("beginner")
+  language          String   @default("ar")
+  durationFr        String   @default("")
+  durationAr        String   @default("")
+  outcomes          Json     @default("[]")
+  requirements      Json     @default("[]")
+  metaTitleFr       String   @default("")
+  metaTitleAr       String   @default("")
+  metaDescriptionFr String   @default("")
+  metaDescriptionAr String   @default("")
+  ogImage           String?
+  published         Boolean  @default(false)
+  submitted         Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  modules      Module[]
+  enrollments  Enrollment[]
+  reviews      Review[]
+  certificates Certificate[]
+  orders       Order[]
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  COMP
+  REFUNDED
+}
+
+enum OrderSource {
+  ACCOUNT_REQUEST
+  GUEST_ORDER
+  MANUAL_GRANT
+}
+
+enum ContactStatus {
+  NEW
+  READ
+}
+
+model ContactMessage {
+  id        String        @id @default(cuid())
+  name      String
+  contact   String
+  message   String
+  status    ContactStatus @default(NEW)
+  createdAt DateTime      @default(now())
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  name            String
+  whatsapp        String      @default("")
+  email           String?
+  courseId        String
+  course          Course      @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  userId          String?
+  user            User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  status          OrderStatus @default(PENDING)
+  source          OrderSource @default(GUEST_ORDER)
+  amountDzd       Int         @default(0)
+  confirmedAt     DateTime?
+  confirmedById   String?
+  confirmedBy     User?       @relation("OrderConfirmedBy", fields: [confirmedById], references: [id], onDelete: SetNull)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([status, createdAt])
+  @@index([courseId])
+}
+
+model Module {
+  id        String   @id @default(cuid())
+  courseId  String
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  titleFr   String
+  titleAr   String
+  sortOrder Int
+  lessons   Lesson[]
+}
+
+model Lesson {
+  id           String   @id @default(cuid())
+  moduleId     String
+  module       Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  titleFr      String
+  titleAr      String
+  sortOrder    Int
+  videoUrl     String?
+  thumbnailUrl String?
+  durationSec  Int?
+  mediaId      String?
+  media        MediaAsset? @relation(fields: [mediaId], references: [id], onDelete: SetNull)
+  progress     LessonProgress[]
+  notes        LessonNote[]
+  views        LessonView[]
+}
+
+model Enrollment {
+  id           String    @id @default(cuid())
+  userId       String
+  courseId     String
+  progress     Float     @default(0)
+  lastLessonId String?
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course       Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+}
+
+model LessonProgress {
+  id          String   @id @default(cuid())
+  userId      String
+  lessonId    String
+  completedAt DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+}
+
+model LessonNote {
+  id        String   @id @default(cuid())
+  userId    String
+  lessonId  String
+  body      String   @default("")
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson    Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+}
+
+model LessonView {
+  id       String   @id @default(cuid())
+  userId   String
+  lessonId String
+  viewedAt DateTime @updatedAt
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson   Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+}
+
+model Certificate {
+  id       String   @id @default(cuid())
+  userId   String
+  courseId String
+  issuedAt DateTime @default(now())
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course   Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  courseId  String
+  rating    Int
+  body      String   @default("")
+  approved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+}
+
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  locale    String   @default("fr")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("newsletter_subscribers")
+}

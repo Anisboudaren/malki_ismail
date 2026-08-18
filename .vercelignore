@@ -1,0 +1,16 @@
+node_modules/
+.next/
+.git/
+out/
+build/
+.DS_Store
+*.log
+.cursor/
+.qc-compare.png
+frames-source/
+*.mp4
+public/sequence/
+public/hero-fallback.webp
+public/still-*.webp
+
+.env*

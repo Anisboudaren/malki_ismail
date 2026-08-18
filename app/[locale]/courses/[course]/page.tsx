@@ -4,16 +4,20 @@ import { notFound } from "next/navigation";
 
 import {
   categoryById,
-  courseBySlug,
   courseUi,
   courses,
-  teacher,
 } from "@/content/content";
 import { DEFAULT_LOCALE, LOCALE_TAG, isLocale, t, type Locale } from "@/lib/i18n";
+import { getPublicTeacher } from "@/lib/public-data";
+import { getPublicCourse, getPublicCourseRecord } from "@/lib/public-course";
+import { getSiteSettings } from "@/lib/site-settings";
+import { getAuthUser } from "@/lib/require-user";
+import { prisma } from "@/lib/prisma";
 import { categoryPath, coursePath, homePath } from "@/lib/routes";
 import CourseCurriculum from "@/app/components/course/CourseCurriculum";
+import { EnrolCta } from "@/app/components/course/EnrolCta";
 import { Breadcrumb } from "@/app/components/ui/Breadcrumb";
-import { ArrowRight, Check, Star, Users } from "@/app/components/ui/Icons";
+import { Check, Star, Users } from "@/app/components/ui/Icons";
 import { PriceFigure } from "@/app/components/ui/PriceFigure";
 import { ButtonLink } from "@/app/components/ui/Primitives";
 import { VideoPreview } from "@/app/components/ui/VideoPreview";
@@ -27,14 +31,28 @@ export function generateStaticParams() {
   return courses.map((course) => ({ course: course.slug }));
 }
 
-export function generateMetadata({ params }: { params: PageParams }): Metadata {
+export async function generateMetadata({ params }: { params: PageParams }): Promise<Metadata> {
   const locale = isLocale(params.locale) ? params.locale : DEFAULT_LOCALE;
-  const course = courseBySlug(params.course);
+  const [course, record, settings] = await Promise.all([
+    getPublicCourse(params.course),
+    getPublicCourseRecord(params.course),
+    getSiteSettings(),
+  ]);
   if (!course) return {};
 
+  const title =
+    (locale === "ar" ? record?.metaTitleAr : record?.metaTitleFr)?.trim() ||
+    `${t(course.title, locale)} — ${
+      (locale === "ar" ? settings?.siteTitleAr : settings?.siteTitleFr)?.trim() || "Malki Academy"
+    }`;
+  const description =
+    (locale === "ar" ? record?.metaDescriptionAr : record?.metaDescriptionFr)?.trim() ||
+    t(course.summary, locale);
+  const og = record?.ogImage || record?.thumbnailUrl || settings?.ogImage;
+
   return {
-    title: `${t(course.title, locale)} — Malki Academy`,
-    description: t(course.summary, locale),
+    title,
+    description,
     alternates: {
       canonical: coursePath(locale, course.slug),
       languages: {
@@ -42,22 +60,69 @@ export function generateMetadata({ params }: { params: PageParams }): Metadata {
         [LOCALE_TAG.ar]: coursePath("ar", course.slug),
       },
     },
+    openGraph: {
+      title,
+      description,
+      ...(og ? { images: [{ url: og }] } : {}),
+    },
   };
 }
 
-export default function CoursePage({ params }: { params: PageParams }) {
+export const revalidate = 120;
+
+export default async function CoursePage({ params }: { params: PageParams }) {
   if (!isLocale(params.locale)) notFound();
   const locale: Locale = params.locale;
 
-  const course = courseBySlug(params.course);
+  const [course, record, sessionUser, teacher] = await Promise.all([
+    getPublicCourse(params.course),
+    getPublicCourseRecord(params.course),
+    getAuthUser(),
+    getPublicTeacher(),
+  ]);
   if (!course) notFound();
+
+  let enrolled = false;
+  let pendingOrder = false;
+  let defaultWhatsapp = "";
+  if (sessionUser && record) {
+    try {
+      const [enrollment, order, profile] = await Promise.all([
+        prisma.enrollment.findUnique({
+          where: { userId_courseId: { userId: sessionUser.id, courseId: record.id } },
+          select: { id: true },
+        }),
+        prisma.order.findFirst({
+          where: {
+            userId: sessionUser.id,
+            courseId: record.id,
+            status: "PENDING",
+          },
+          select: { id: true },
+        }),
+        prisma.user.findUnique({
+          where: { id: sessionUser.id },
+          select: { whatsapp: true },
+        }),
+      ]);
+      enrolled = Boolean(enrollment);
+      pendingOrder = Boolean(order);
+      defaultWhatsapp = profile?.whatsapp ?? "";
+    } catch {
+      enrolled = false;
+      pendingOrder = false;
+    }
+  }
 
   const category = categoryById(course.categoryId);
   const { price, social } = course;
+  const description = course.description;
+  const requirements = course.requirements ?? [];
+  const bodyText = description ? t(description, locale) : "";
+  const summaryText = t(course.summary, locale);
 
   return (
     <main className="pt-[var(--nav-height)]">
-      {/* ------------------------------ Header ------------------------------ */}
       <section className="border-b border-ink-line bg-ink-soft">
         <div className="shell py-12 md:py-16">
           <Breadcrumb
@@ -83,7 +148,6 @@ export default function CoursePage({ params }: { params: PageParams }) {
               </span>
 
               <h1 className="heading-lg mt-6 text-balance">{t(course.title, locale)}</h1>
-              {/* The other language as a support line, matching the home page. */}
               <p
                 lang={locale === "fr" ? "ar" : "fr"}
                 className="mt-3 font-body text-lg text-cream-faint"
@@ -91,7 +155,7 @@ export default function CoursePage({ params }: { params: PageParams }) {
                 {t(course.title, locale === "fr" ? "ar" : "fr")}
               </p>
 
-              <p className="body-lg mt-6 text-pretty">{t(course.summary, locale)}</p>
+              <p className="body-lg mt-6 text-pretty">{summaryText}</p>
 
               <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 font-body text-sm text-cream-faint">
                 <span className="inline-flex items-center gap-1.5">
@@ -134,10 +198,14 @@ export default function CoursePage({ params }: { params: PageParams }) {
         </div>
       </section>
 
-      {/* ------------------------------- Body ------------------------------- */}
       <div className="shell grid gap-14 py-16 md:py-20 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-16">
         <div className="space-y-16">
-          {/* What you'll learn */}
+          {bodyText && bodyText !== summaryText ? (
+            <section>
+              <p className="font-body text-[0.9375rem] leading-relaxed text-cream-dim">{bodyText}</p>
+            </section>
+          ) : null}
+
           <section>
             <h2 className="heading-md">{t(course.learnTitle, locale)}</h2>
             <ul className="mt-6 grid gap-x-8 gap-y-4 sm:grid-cols-2">
@@ -152,9 +220,24 @@ export default function CoursePage({ params }: { params: PageParams }) {
             </ul>
           </section>
 
+          {requirements.length > 0 ? (
+            <section>
+              <h2 className="heading-md">{locale === "ar" ? "المتطلبات" : "Prérequis"}</h2>
+              <ul className="mt-6 space-y-3">
+                {requirements.map((point) => (
+                  <li key={point.fr} className="flex items-start gap-3">
+                    <Check className="mt-1 h-4 w-4 shrink-0 text-gold" />
+                    <span className="font-body text-[0.9375rem] leading-relaxed text-cream-dim">
+                      {t(point, locale)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
           <CourseCurriculum course={course} />
 
-          {/* Teacher */}
           <section>
             <h2 className="heading-md">{t(courseUi.taughtBy, locale)}</h2>
             <div className="mt-6 flex flex-col gap-5 rounded-2xl border border-ink-line bg-ink-card p-6 sm:flex-row sm:items-start">
@@ -192,7 +275,6 @@ export default function CoursePage({ params }: { params: PageParams }) {
           </section>
         </div>
 
-        {/* ---------------------------- Buy panel ---------------------------- */}
         <aside className="lg:sticky lg:top-28 lg:self-start">
           <div className="rounded-2xl border border-gold-muted/30 bg-ink-card p-7">
             <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
@@ -203,29 +285,34 @@ export default function CoursePage({ params }: { params: PageParams }) {
               <span className="font-body text-base font-medium text-gold">
                 {t(price.currency, locale)}
               </span>
-              <span className="font-body text-sm text-cream-faint line-through">
-                <span className="bidi-ltr">{price.strikeAmount}</span>{" "}
-                {t(price.currency, locale)}
-              </span>
-              {/* The leading minus is a neutral, so an un-isolated `-20٪`
-                  flips its sign to the far side on /ar. */}
-              <span className="bidi-ltr rounded-full bg-gold/15 px-2 py-0.5 font-body text-[0.6875rem] font-semibold text-gold">
-                {t(price.discountBadge, locale)}
-              </span>
+              {price.strikeAmount ? (
+                <span className="font-body text-sm text-cream-faint line-through">
+                  <span className="bidi-ltr">{price.strikeAmount}</span>{" "}
+                  {t(price.currency, locale)}
+                </span>
+              ) : null}
+              {price.strikeAmount ? (
+                <span className="bidi-ltr rounded-full bg-gold/15 px-2 py-0.5 font-body text-[0.6875rem] font-semibold text-gold">
+                  {t(price.discountBadge, locale)}
+                </span>
+              ) : null}
             </div>
             <p className="mt-2 font-body text-xs text-cream-faint">
               {t(price.note, locale)}
             </p>
 
-            <ButtonLink
-              href={course.enrolHref}
-              variant="gold"
-              size="lg"
-              className="mt-6 w-full"
-            >
-              {t(courseUi.enrol, locale)}
-              <ArrowRight className="h-4 w-4 rtl:rotate-180" />
-            </ButtonLink>
+            <EnrolCta
+              courseId={record?.id ?? null}
+              loggedIn={Boolean(sessionUser)}
+              enrolLabel={t(courseUi.enrol, locale)}
+              wpHref={course.enrolHref}
+              locale={locale}
+              defaultName={sessionUser?.name ?? ""}
+              defaultWhatsapp={defaultWhatsapp}
+              enrolled={enrolled}
+              pending={pendingOrder}
+              playerHref={enrolled ? `/student/courses/${course.slug}` : undefined}
+            />
 
             <dl className="mt-7 space-y-px border-t border-ink-line pt-1">
               {course.meta.map((item) => (

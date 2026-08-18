@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useTransition, type FormEvent } from "react";
 
-import { brand, footer } from "@/content/content";
+import { subscribeNewsletter } from "@/app/actions/newsletter";
+import { brand, contactForm, footer } from "@/content/content";
 import { useT } from "@/lib/LocaleProvider";
+import { publicHref } from "@/lib/routes";
+import { ContactForm } from "./ContactForm";
 import { ArrowRight, socialIcons } from "./ui/Icons";
 import { Reveal } from "./ui/Reveal";
 
 export default function Footer() {
-  const { t } = useT();
+  const { t, locale } = useT();
 
   return (
     <footer id="contact" className="scroll-mt-24 border-t border-ink-line bg-ink">
@@ -18,7 +21,7 @@ export default function Footer() {
           <div>
             <Reveal>
               <a
-                href="#hero"
+                href={publicHref(locale, "#hero")}
                 className="font-latin-display text-2xl font-semibold tracking-tightest text-cream"
               >
                 {brand.name}
@@ -36,23 +39,25 @@ export default function Footer() {
               <Newsletter />
             </Reveal>
 
-            <Reveal delay={0.12}>
-              <div className="mt-8 flex gap-3">
-                {footer.socials.map((social) => {
-                  const Icon = socialIcons[social.icon];
-                  return (
-                    <a
-                      key={social.label}
-                      href={social.href}
-                      aria-label={social.label}
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-ink-line text-cream-dim transition-colors duration-300 ease-cinema hover:border-gold hover:text-gold"
-                    >
-                      <Icon className="h-4 w-4" />
-                    </a>
-                  );
-                })}
-              </div>
-            </Reveal>
+            {footer.socials.length > 0 ? (
+              <Reveal delay={0.12}>
+                <div className="mt-8 flex gap-3">
+                  {footer.socials.map((social) => {
+                    const Icon = socialIcons[social.icon];
+                    return (
+                      <a
+                        key={social.label}
+                        href={social.href}
+                        aria-label={social.label}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-ink-line text-cream-dim transition-colors duration-300 ease-cinema hover:border-gold hover:text-gold"
+                      >
+                        <Icon className="h-4 w-4" />
+                      </a>
+                    );
+                  })}
+                </div>
+              </Reveal>
+            ) : null}
           </div>
 
           {/* Link columns */}
@@ -66,7 +71,7 @@ export default function Footer() {
                   {column.links.map((link) => (
                     <li key={link.label.fr}>
                       <a
-                        href={link.href}
+                        href={publicHref(locale, link.href)}
                         className="font-body text-sm text-cream-dim transition-colors duration-300 ease-cinema hover:text-cream"
                       >
                         {t(link.label)}
@@ -78,6 +83,20 @@ export default function Footer() {
             ))}
           </div>
         </div>
+
+        <Reveal delay={0.08}>
+          <div className="mt-16 grid gap-10 border-t border-ink-line pt-10 lg:grid-cols-[1fr_1.1fr]">
+            <div>
+              <h2 className="font-display text-2xl font-semibold tracking-tight text-cream">
+                {t(contactForm.title)}
+              </h2>
+              <p className="mt-3 max-w-md font-body text-sm leading-relaxed text-cream-dim">
+                {t(contactForm.body)}
+              </p>
+            </div>
+            <ContactForm />
+          </div>
+        </Reveal>
 
         {/* Contact strip */}
         <Reveal delay={0.1}>
@@ -106,7 +125,7 @@ export default function Footer() {
             {footer.legal.map((link) => (
               <li key={link.label.fr}>
                 <a
-                  href={link.href}
+                  href={publicHref(locale, link.href)}
                   className="font-body text-xs text-cream-faint transition-colors hover:text-cream"
                 >
                   {t(link.label)}
@@ -121,13 +140,27 @@ export default function Footer() {
 }
 
 function Newsletter() {
-  const { t } = useT();
+  const { t, locale } = useT();
   const [submitted, setSubmitted] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
-  // No backend yet — this only acknowledges the submit locally.
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSubmitted(true);
+    const formData = new FormData(event.currentTarget);
+    startTransition(async () => {
+      const result = await subscribeNewsletter(formData);
+      if (result.ok || result.reason === "duplicate") {
+        setSubmitted(true);
+        setMessage(
+          result.ok
+            ? t(footer.newsletter.success)
+            : t(footer.newsletter.duplicate),
+        );
+        return;
+      }
+      setMessage(t(footer.newsletter.error));
+    });
   };
 
   return (
@@ -140,31 +173,46 @@ function Newsletter() {
       </p>
 
       {submitted ? (
-        <p className="mt-5 font-body text-sm text-gold">{t(footer.newsletter.success)}</p>
+        <p className="mt-5 font-body text-sm text-gold">{message}</p>
       ) : (
         <form onSubmit={onSubmit} className="mt-5 flex max-w-sm items-center gap-2">
           <label htmlFor="newsletter-email" className="sr-only">
             {t(footer.newsletter.placeholder)}
           </label>
+          <input type="hidden" name="locale" value={locale} />
           <input
             id="newsletter-email"
+            name="email"
             type="email"
             required
+            disabled={pending}
             // Email addresses are always Latin; forcing LTR keeps the caret and
             // the `@` where the user expects them on /ar.
             dir="ltr"
             placeholder={t(footer.newsletter.placeholder)}
-            className="min-w-0 flex-1 rounded-full border border-ink-line bg-ink-card px-5 py-3 font-body text-sm text-cream placeholder:text-cream-faint focus:border-gold-muted focus:outline-none"
+            className="min-w-0 flex-1 rounded-full border border-ink-line bg-ink-card px-5 py-3 font-body text-sm text-cream placeholder:text-cream-faint focus:border-gold-muted focus:outline-none disabled:opacity-60"
           />
           <button
             type="submit"
+            disabled={pending}
+            aria-busy={pending}
             aria-label={t(footer.newsletter.cta)}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gold text-ink transition-colors duration-300 ease-cinema hover:bg-cream"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gold text-ink transition-colors duration-300 ease-cinema hover:bg-cream disabled:opacity-60"
           >
-            <ArrowRight className="h-4 w-4 rtl:rotate-180" />
+            {pending ? (
+              <span
+                className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                aria-hidden
+              />
+            ) : (
+              <ArrowRight className="h-4 w-4 rtl:rotate-180" />
+            )}
           </button>
         </form>
       )}
+      {!submitted && message ? (
+        <p className="mt-3 font-body text-sm text-gold">{message}</p>
+      ) : null}
     </div>
   );
 }
